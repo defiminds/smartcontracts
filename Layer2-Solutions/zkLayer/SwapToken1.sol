@@ -19,14 +19,9 @@ contract SWAPToken {
         balanceOf[msg.sender] = totalSupply;
     }
 
-    function approve(address spender, uint256 value) external returns (bool success) {
-        allowance[msg.sender][spender] = value;
-        emit Approval(msg.sender, spender, value);
+    function approve(address token_address) external returns (bool success) {
+        emit Approval(msg.sender, token_address, 0);
         return true;
-    }
-
-    function deposit() external payable {
-        balanceOf[msg.sender] += msg.value;
     }
 
     function swap(uint256 amount) external {
@@ -49,13 +44,4 @@ contract SWAPToken {
         return true;
     }
 
-    function transferFrom(address from, address to, uint256 value) external returns (bool success) {
-        require(balanceOf[from] >= value, "Not enough balance");
-        require(allowance[from][msg.sender] >= value, "Not enough allowance");
-        balanceOf[from] -= value;
-        balanceOf[to] += value;
-        allowance[from][msg.sender] -= value;
-        emit Transfer(from, to, value);
-        return true;
-    }
 }
