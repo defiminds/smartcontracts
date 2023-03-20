@@ -8,7 +8,7 @@ title: My Repository
 <ul>
 {% assign sorted_pages = site.pages | sort:"url" %}
 {% for page in sorted_pages %}
-  {% if page.url contains "/docs/" %}
+  {% if page.url contains "./" %}
     {% assign folder = page.url | split:"/" | first %}
     {% assign is_folder = folder == page.basename %}
     {% if is_folder %}
