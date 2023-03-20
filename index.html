@@ -1,76 +1,104 @@
 <!DOCTYPE html>
-<html lang="en">
-<html><head>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Lista de diretórios</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			margin: 0;
+			padding: 0;
+		}
+		#container {
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: space-around;
+			align-items: center;
+			padding: 20px;
+			background-color: #f0f0f0;
+		}
+		.item {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			width: 200px;
+			height: 200px;
+			margin: 10px;
+			padding: 10px;
+			background-color: white;
+			box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
+			transition: transform 0.2s ease-in-out;
+		}
+		.item:hover {
+			transform: scale(1.1);
+		}
+		.item img {
+			max-width: 100%;
+			max-height: 100%;
+		}
+		.item a {
+			text-decoration: none;
+			color: black;
+			font-weight: bold;
+			margin-top: 10px;
+		}
+	</style>
+</head>
+<body>
+	<h1>Lista de diretórios</h1>
+	<div id="container">
+		<!-- Os itens do diretório serão adicionados aqui pelo JavaScript -->
+	</div>
+	<script>
+		// Define a função para carregar a lista de arquivos e pastas
+		function loadDirectoryList() {
+			var container = document.getElementById("container");
+			container.innerHTML = ""; // Limpa o conteúdo anterior
 
-<title>Directory Listing</title>
+			// Faz uma requisição HTTP GET para obter a lista de arquivos e pastas
+			var xhr = new XMLHttpRequest();
+			xhr.open("GET", ".", true);
+			xhr.onload = function() {
+				if (xhr.status == 200) {
+					// Converte a resposta em HTML usando um objeto DOM temporário
+					var tmp = document.createElement("div");
+					tmp.innerHTML = xhr.response;
+					var links = tmp.getElementsByTagName("a");
 
-<style type="text/css">
-body {
-	background: #eee;
-	margin: 33px;
-	color: #333;
-	}
-h1 {
-	font: 2.0em Georgia, serif;
-	}
-h1 a:hover, h1 a:active {
-	text-decoration: none;
-	}
-a:link {
-	text-decoration: none;
-	color: #555;
-	}
-a:visited {
-	text-decoration: none;
-	color: #777;
-	}
-a:hover, a:active {
-	text-decoration: underline;
-	color: maroon;
-	}
-pre {
-	font: 0.9em/1.3em "Courier New", Courier;
-	margin: 3px 0;
-	color: #777;
-	}
-pre img {
-	display: inline;
-	}
-img {
-	margin: 3px 0;
-	}
+					// Adiciona cada item do diretório ao container
+					for (var i = 0; i < links.length; i++) {
+						var link = links[i];
+						var item = document.createElement("div");
+						item.className = "item";
+						if (link.href.endsWith("/")) {
+							// É uma pasta
+							item.innerHTML = "<img src='folder.png'>" +
+								"<a href='" + link.href + "'>" + link.textContent + "</a>";
+						} else {
+							// É um arquivo
+							item.innerHTML = "<img src='file.png'>" +
+								"<a href='" + link.href + "' download>" + link.textContent + "</a>";
+						}
+						container.appendChild(item);
+					}
+				} else {
+					// Mostra uma mensagem de erro se a requisição falhar
+					container.innerHTML = "Erro " + xhr.status + ": " + xhr.statusText;
+				}
+			};
+			xhr.onerror = function() {
+				// Mostra uma mensagem de erro se a requisição falhar
+				container.innerHTML = "Erro de rede.";
+			};
+			xhr.send();
+		}
 
-.description {
-	font-style: italic;
-	font-size: 90%;
-	color: #777;
-	}
-.dark-mode {
-     background-color: #333;
-     color: white;
-     }
-</style>
-
-
-	</head>
-        <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
-	<body>
-		<h1>Directory Listing</h1>
-<pre><img src="/iconsx/blank.gif" alt="Icon " width="16" height="16"> <a href="?C=N;O=A">Name</a>                    <a href="?C=M;O=A">Last modified</a>      <a href="?C=S;O=A">Size</a>  <a href="?C=D;O=A">Description</a><hr><a href="tools/"><img src="/iconsx/folder.gif" alt="[DIR]" width="16" height="16"></a> <a href="tools/">tools/</a>                  2023-03-19 17:19    -   [<span class="description">unknown item..</span>]
-<a href="dev/"><img src="/iconsx/folder.gif" alt="[DIR]" width="16" height="16"></a> <a href="dev/">dev/</a>                    2023-03-19 18:26    -   [<span class="description">unknown item..</span>]
-<a href="open%20GUI%20Frontend"><img src="/iconsx/generic.gif" alt="[   ]" width="16" height="16"></a> <a href="open%20GUI%20Frontend">open GUI Frontend</a>       2023-03-19 21:15  3.2K  [<span class="description">unknown item..</span>]
-<a href="livechart.html"><img src="/iconsx/uu.gif" alt="[TXT]" width="16" height="16"></a> <a href="livechart.html">livechart.html</a>          2023-03-19 14:23  3.2K  Hypertext Markup Language
-<hr></pre>
-
-
-
+		// Chama a função inicialmente para carregar a lista de arquivos e
+		loadDirectoryList();
+	// Define um intervalo para atualizar a lista de arquivos automaticamente a cada 5 segundos
+	setInterval(function() {
+		loadDirectoryList();
+	}, 5000);
+</script>
 </body>
-
-    <script>
-        function toggleDarkMode() {
-            var body = document.querySelector("body");
-            body.classList.toggle("dark-mode");
-        }
-    </script>
-
 </html>
