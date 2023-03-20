@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<body>
+<---
+layout: default
+title: File List
+---
+<h1>File List</h1>
+
+<ul>
+{% for file in site.static_files %}
+  <li><a href="{{ site.baseurl }}{{ file.path }}">{{ file.path }}</a></li>
+{% endfor %}
+</body>
+</html>
