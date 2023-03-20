@@ -1,0 +1,19 @@
+---
+layout: default
+title: My Repository
+---
+
+<h1>My Repository</h1>
+
+<ul>
+{% assign sorted_pages = site.pages | sort:"url" %}
+{% for page in sorted_pages %}
+  {% if page.url contains "/docs/" %}
+    {% assign folder = page.url | split:"/" | first %}
+    {% assign is_folder = folder == page.basename %}
+    {% if is_folder %}
+      <li><a href="{{ page.url }}">{{ folder }}</a></li>
+    {% endif %}
+  {% endif %}
+{% endfor %}
+</ul>
