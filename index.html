@@ -1,21 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Directory Listing</title>
-    <style>
-        body {
-            background-color: white;
-            color: black;
-        }
-        .dark-mode {
-            background-color: #333;
-            color: white;
-        }
-    </style>
-</head>
+<html><head>
 
+<title>Directory Listing</title>
+
+<style type="text/css">
+body {
+	background: #eee;
+	margin: 33px;
+	color: #333;
+	}
+h1 {
+	font: 2.0em Georgia, serif;
+	}
+h1 a:hover, h1 a:active {
+	text-decoration: none;
+	}
+a:link {
+	text-decoration: none;
+	color: #555;
+	}
+a:visited {
+	text-decoration: none;
+	color: #777;
+	}
+a:hover, a:active {
+	text-decoration: underline;
+	color: maroon;
+	}
+pre {
+	font: 0.9em/1.3em "Courier New", Courier;
+	margin: 3px 0;
+	color: #777;
+	}
+pre img {
+	display: inline;
+	}
+img {
+	margin: 3px 0;
+	}
+
+.description {
+	font-style: italic;
+	font-size: 90%;
+	color: #777;
+	}
+.dark-mode {
+     background-color: #333;
+     color: white;
+     }
+</style>
+
+
+	</head>
         <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+	<body>
+		<h1>Directory Listing</h1>
+<pre><img src="/iconsx/blank.gif" alt="Icon " width="16" height="16"> <a href="?C=N;O=A">Name</a>                    <a href="?C=M;O=A">Last modified</a>      <a href="?C=S;O=A">Size</a>  <a href="?C=D;O=A">Description</a><hr><a href="tools/"><img src="/iconsx/folder.gif" alt="[DIR]" width="16" height="16"></a> <a href="tools/">tools/</a>                  2023-03-19 17:19    -   [<span class="description">unknown item..</span>]
+<a href="dev/"><img src="/iconsx/folder.gif" alt="[DIR]" width="16" height="16"></a> <a href="dev/">dev/</a>                    2023-03-19 18:26    -   [<span class="description">unknown item..</span>]
+<a href="open%20GUI%20Frontend"><img src="/iconsx/generic.gif" alt="[   ]" width="16" height="16"></a> <a href="open%20GUI%20Frontend">open GUI Frontend</a>       2023-03-19 21:15  3.2K  [<span class="description">unknown item..</span>]
+<a href="livechart.html"><img src="/iconsx/uu.gif" alt="[TXT]" width="16" height="16"></a> <a href="livechart.html">livechart.html</a>          2023-03-19 14:23  3.2K  Hypertext Markup Language
+<hr></pre>
+
+
+
+</body>
 
     <script>
         function toggleDarkMode() {
@@ -23,4 +72,5 @@
             body.classList.toggle("dark-mode");
         }
     </script>
+
 </html>
