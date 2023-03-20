@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Directory Listing</title>
+    <style>
+        body {
+            background-color: white;
+            color: black;
+        }
+        .dark-mode {
+            background-color: #333;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Directory Listing</h1>
+    <div>
+        <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+    </div>
+    <ul>
+        <?php
+        // Get files in root directory
+        $files = scandir("/");
+        // Exclude . and .. from the list
+        $files = array_diff($files, array(".", ".."));
+        // Print the files as list items
+        foreach ($files as $file) {
+            echo "<li>$file</li>";
+        }
+        ?>
+    </ul>
+    <script>
+        function toggleDarkMode() {
+            var body = document.querySelector("body");
+            body.classList.toggle("dark-mode");
+        }
+    </script>
+</body>
+</html>
