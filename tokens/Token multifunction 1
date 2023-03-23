@@ -1,0 +1,528 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity >=0.7.0 <0.9.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract MyToken is ERC20, Ownable {
+uint256 private constant MAX = ~uint256(0);
+uint256 private constant INITIAL_SUPPLY = 41300000000 * 10**18;
+uint256 private _tTotal = (MAX - (MAX % INITIAL_SUPPLY));
+uint8 private _decimals = 18;
+
+mapping (address => bool) private _isExcluded;
+address[] private _excluded;
+
+uint256 private _tFeeTotal;
+uint256 private _liquidityFee;
+address private _liquidityPool;
+
+constructor () ERC20("MyToken", "MTK") {
+_mint(msg.sender, INITIAL_SUPPLY);
+
+// exclude owner and this contract from fee
+_isExcluded[owner()] = true;
+_isExcluded[address(this)] = true;
+_excluded.push(owner());
+_excluded.push(address(this));
+
+// set initial liquidity fee and pool address
+_liquidityFee = 1;
+_liquidityPool = address(0x1234567890123456789012345678901234567890);
+}
+
+function _transferExcluded(address sender, address recipient, uint256 amount) private {
+_balances[sender] = _balances[sender].sub(amount);
+_balances[recipient] = _balances[recipient].add(amount);
+emit Transfer(sender, recipient, amount);
+}
+
+function _getValues(uint256 tAmount) private view returns (uint256, uint256, uint256) {
+uint256 tFee = tAmount.mul(_liquidityFee).div(100);
+uint256 tTransferAmount = tAmount.sub(tFee);
+uint256 rAmount = tAmount.mul(_getRate());
+uint256 rFee = tFee.mul(_getRate());
+uint256 rTransferAmount = rAmount.sub(rFee);
+return (rAmount, rTransferAmount, rFee);
+}
+
+function _getRate() private view returns (uint256) {
+(uint256 rSupply, uint256 tSupply) = _getCurrentSupply();
+return rSupply.div(tSupply);
+}
+
+function _getCurrentSupply() private view returns (uint256, uint256) {
+uint256 rSupply = _rTotal;
+uint256 tSupply = _tTotal;
+for (uint256 i = 0; i < _excluded.length; i++) {
+if (_balances[_excluded[i]] > rSupply || _tTotal < tSupply) {
+return (_rTotal, _tTotal);
+}
+rSupply = rSupply.sub(_balances[_excluded[i]].mul(_getRate()));
+tSupply = tSupply.sub(_balances[_excluded[i]]);
+}
+if (rSupply < _rTotal.div(_tTotal)) {
+return (_rTotal, _tTotal);
+}
+return (rSupply, tSupply);
+}
+
+function _approve(address owner, address spender, uint256 amount) private {
+require(owner != address(0), "ERC20: approve from the zero address");
+require(spender != address(0), "ERC20: approve to the zero address");
+_allowances[owner][spender] = amount;
+emit Approval(owner, spender, amount);
+}
+
+function burn(uint256 amount) public {
+_burn(_msgSender(), amount);
+}
+
+function burnFrom(address account, uint256 amount) public {
+uint256 currentAllowance = allowance(account, _msgSender());
+require(currentAllowance >= amount, "ERC20: burn amount exceeds allowance");
+_approve(account, _msgSender(), currentAllowance.sub(amount));
+_burn(account, amount);
+}
+
+function _burn(address account, uint256 amount) internal {
+require(account != address(0), "ERC20: burn from the zero address");
+
+uint256 rAmount = amount.mul(_getRate());
+_tTotal = _tTotal.sub(amount);
+_rTotal = _rTotal.sub(rAmount);
+_balances[account] = _balances[account].sub(amount);
+_rOwned[account] = _rOwned[account].sub(rAmount);
+emit Transfer(account, address(0), amount);
+}
+
+function setFeeReceiver(address payable receiver) external onlyOwner {
+_feeReceiver = receiver;
+}
+
+function setMaxTxPercent(uint256 maxTxPercent) external onlyOwner {
+require(maxTxPercent > 0, "Max transfer percent should be greater than 0");
+_maxTxAmount = _tTotal.mul(maxTxPercent).div(10**2);
+}
+
+function setSwapAndLiquifyEnabled(bool enabled) public onlyOwner {
+swapAndLiquifyEnabled = enabled;
+emit SwapAndLiquifyEnabledUpdated(enabled);
+}
+
+function withdrawBNB() external onlyOwner {
+uint256 balance = address(this).balance;
+require(balance > 0, "Balance is zero");
+_feeReceiver.transfer(balance);
+}
+
+function transferToAddressETH(address payable recipient, uint256 amount) private {
+recipient.transfer(amount);
+}
+
+receive() external payable {}
+
+function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
+// split the contract balance into halves
+uint256 half = contractTokenBalance.div(2);
+uint256 otherHalf = contractTokenBalance.sub(half);
+
+// capture the contract's current BNB balance
+uint256 initialBalance = address(this).balance;
+
+// swap tokens for BNB
+swapTokensForBNB(half);
+
+// how much BNB did we just swap into?
+uint256 newBalance = address(this).balance.sub(initialBalance);
+
+// add liquidity to uniswap
+addLiquidity(otherHalf, newBalance);
+
+emit SwapAndLiquify(half, newBalance, otherHalf);
+}
+
+function swapTokensForBNB(uint256 tokenAmount) private {
+// generate the uniswap pair path of token -> BNB
+address[] memory path = new address[](2);
+path[0] = address(this);
+path[1] = uniswapV2Router.WETH();
+
+_approve(address(this), address(uniswapV2Router), tokenAmount);
+
+// make the swap
+uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+tokenAmount,
+0, // accept any amount of BNB
+path,
+address(this),
+block.timestamp
+);
+}
+
+function addLiquidity(uint256 tokenAmount, uint256 bnbAmount) private {
+// approve token transfer to cover all possible scenarios
+_approve(address(this), address(uniswapV2Router), tokenAmount);
+
+// add the liquidity
+uniswapV2Router.addLiquidityETH{value: bnbAmount}(
+address(this),
+tokenAmount,
+0, // slippage is unavoidable
+0, // slippage is unavoidable
+owner(),
+block.timestamp
+);
+
+}
+
+modifier lockTheSwap {
+_locked = true;
+_;
+_locked = false;
+}
+
+function _transfer(
+address from,
+address to,
+uint256 amount
+) internal virtual {
+require(from != address(0), "ERC20: transfer from the zero address");
+require(to != address(0), "ERC20: transfer to the zero address");
+require(amount > 0, "Transfer amount must be greater than zero");
+
+if (from != owner() && to != owner()) {
+require(
+amount <= _maxTxAmount,
+"Transfer amount exceeds the maxTxAmount."
+);
+}
+
+uint256 contractTokenBalance = balanceOf(address(this));
+
+bool overMinTokenBalance = contractTokenBalance >= _numTokensSellToAddToLiquidity;
+if (
+overMinTokenBalance &&
+!inSwapAndLiquify &&
+from != uniswapV2Pair &&
+swapAndLiquifyEnabled
+) {
+// add liquidity
+swapAndLiquify(contractTokenBalance);
+}
+
+// calculate the amount of tokens to transfer and the amount of tokens
+// that will be received by the recipient after the fee is applied
+uint256 tAmount = amount.mul(_getTransferFeeRate());
+uint256 rAmount = tAmount.mul(_getRate());
+
+// subtract the transfer amount and fee from the sender's balance
+_balances[from] = _balances[from].sub(amount, "ERC20: transfer amount exceeds balance");
+_rOwned[from] = _rOwned[from].sub(rAmount);
+_rOwned[_feeReceiver] = _rOwned[_feeReceiver].add(tAmount.mul(_getFeeRate()).mul(_getRate()));
+
+// add the transfer amount minus the fee to the recipient's balance
+_balances[to] = _balances[to].add(amount.sub(tAmount));
+_rOwned[to] = _rOwned[to].add(rAmount.sub(tAmount.mul(_getRate())));
+
+// update the last transaction timestamp for the sender and recipient
+_lastTransfer[from] = block.timestamp;
+_lastTransfer[to] = block.timestamp;
+
+// emit the Transfer event
+emit Transfer(from, to, amount.sub(tAmount));
+if (tAmount > 0) {
+emit Transfer(from, _feeReceiver, tAmount.mul(_getFeeRate()).div(100));
+}
+
+// automatically burn tokens if the balance exceeds the maxWalletBalance
+uint256 walletBalance = balanceOf(to);
+if (walletBalance > _maxWalletBalance) {
+uint256 overBalance = walletBalance.sub(_maxWalletBalance);
+_burn(to, overBalance);
+}
+
+// automatically buy back and burn tokens if the balance of the liquidity pool exceeds the maxLiquidityBalance
+if (_liquidityPool != address(0)) {
+uint256 liquidityBalance = balanceOf(_liquidityPool);
+if (liquidityBalance > _maxLiquidityBalance) {
+uint256 overBalance = liquidityBalance.sub(_maxLiquidityBalance);
+swapTokensForEthAndBurn(overBalance);
+}
+}
+
+// add the transfer amount and the received amount to the recipient's balance
+_balances[to] = _balances[to].add(amount.sub(tAmount));
+_rOwned[to] = _rOwned[to].add(rAmount);
+
+// emit transfer event
+emit Transfer(from, to, amount.sub(tAmount));
+
+// take snapshot if necessary
+if (shouldSnapshot()) {
+_snapshot();
+}
+}
+
+function _transferExcluded(address sender, address recipient, uint256 amount) internal {
+// subtract the transfer amount from the sender's balance
+_balances[sender] = _balances[sender].sub(amount, "ERC20: transfer amount exceeds balance");
+
+// add the transfer amount to the recipient's balance
+_balances[recipient] = _balances[recipient].add(amount);
+
+// emit transfer event
+emit Transfer(sender, recipient, amount);
+
+}
+
+function _getValues(uint256 tAmount) private view returns (uint256, uint256, uint256) {
+uint256 tFee = tAmount.mul(_liquidityFee).div(100);
+uint256 tTransferAmount = tAmount.sub(tFee);
+uint256 rAmount = tAmount.mul(_getRate());
+uint256 rFee = tFee.mul(_getRate());
+uint256 rTransferAmount = rAmount.sub(rFee);
+return (rAmount, rTransferAmount, rFee);
+}
+
+function _getTransferFeeRate() private view returns (uint256) {
+if (_isFeeExempt[_msgSender()] || _isFeeExempt[address(this)]) {
+return 0;
+}
+return _liquidityFee;
+}
+
+function _getRate() private view returns (uint256) {
+(uint256 rSupply, uint256 tSupply) = _getCurrentSupply();
+return rSupply.div(tSupply);
+}
+
+function _getCurrentSupply() private view returns (uint256, uint256) {
+uint256 rSupply = _rTotal;
+uint256 tSupply = _tTotal;
+for (uint256 i = 0; i < _excluded.length; i++) {
+if (_rOwned[_excluded[i]] > rSupply || _tOwned[_excluded[i]] > tSupply) {
+return (_rTotal, _tTotal);
+}
+rSupply = rSupply.sub(_rOwned[_excluded[i]]);
+tSupply = tSupply.sub(_tOwned[_excluded[i]]);
+}
+if (rSupply < _rTotal.div(_tTotal)) {
+return (_rTotal, _tTotal);
+}
+return (rSupply, tSupply);
+}
+
+function _approve(address owner, address spender, uint256 amount) internal override {
+require(owner != address(0), "ERC20: approve from the zero address");
+require(spender != address(0), "ERC20: approve to the zero address");
+_allowances[owner][spender] = amount;
+emit Approval(owner, spender, amount);
+}
+
+function shouldSnapshot() private view returns (bool) {
+return block.timestamp.sub(_lastSnapshotTimestamp) >= _snapshotInterval;
+}
+
+function _snapshot() private {
+uint256 currentSupply = totalSupply();
+_snapshots.push(currentSupply);
+emit Snapshot(currentSupply);
+_lastSnapshotTimestamp = block.timestamp;
+}
+
+function _transferExcluded(address sender, address recipient, uint256 amount) private {
+// transfer the full amount to the recipient
+_balances[sender] = _balances[sender].sub(amount, "ERC20: transfer amount exceeds balance");
+_balances[recipient] = _balances[recipient].add(amount);
+_rOwned[sender] = _rOwned[sender].sub(amount.mul(_getRate()));
+_rOwned[recipient] = _rOwned[recipient].add(amount.mul(_getRate()));
+emit Transfer(sender, recipient, amount);
+}
+
+function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
+// split the token balance into halves
+uint256 half = contractTokenBalance.div(2);
+uint256 otherHalf = contractTokenBalance.sub(half);
+
+// capture the contract's current ETH balance
+uint256 initialBalance = address(this).balance;
+
+// swap tokens for ETH
+swapTokensForEth(half);
+
+// how much ETH did we just swap into?
+uint256 newBalance = address(this).balance.sub(initialBalance);
+
+// add liquidity to Uniswap
+addLiquidity(otherHalf, newBalance);
+emit SwapAndLiquify(half, newBalance, otherHalf);
+}
+
+function swapTokensForEth(uint256 tokenAmount) private {
+// generate the Uniswap pair path of token -> WETH
+address[] memory path = new address;
+path[0] = address(this);
+path[1] = uniswapV2Router.WETH();
+
+// approve the transfer of tokens to the router
+_approve(address(this), address(uniswapV2Router), tokenAmount);
+
+// make the swap
+uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+tokenAmount,
+0, // accept any amount of ETH
+path,
+address(this),
+block.timestamp
+);
+}
+
+function addLiquidity(uint256 tokenAmount, uint256 ethAmount) private {
+// approve the transfer of tokens to the router
+_approve(address(this), address(uniswapV2Router), tokenAmount);
+
+// add the liquidity
+uniswapV2Router.addLiquidityETH{value: ethAmount}(
+address(this),
+tokenAmount,
+0, // slippage is unavoidable
+0, // slippage is unavoidable
+owner(),
+block.timestamp
+);
+}
+
+function _getTransferFeeRate() private view returns (uint256) {
+if (from == uniswapV2Pair) {
+return _sellFeeRate;
+} else {
+return _buyFeeRate;
+}
+}
+
+function _getTransferRate() private view returns (uint256) {
+if (_isExcluded[from] || _isExcluded[to]) {
+return _EXCLUDED_TRANSFER_RATE;
+} else {
+return _TRANSFER_RATE;
+}
+}
+
+function _getRate() private view returns (uint256) {
+return _rTotal.div(_tTotal);
+}
+
+function _distributeFees() private {
+// calculate the amount of fees to distribute
+uint256 fees = balanceOf(_feeReceiver).mul(_redistributionRate).div(10**2);
+
+// only distribute fees if there are any
+if (fees > 0) {
+// reset the balance of the fee receiver
+_balances[_feeReceiver] = _balances[_feeReceiver].sub(fees);
+_rOwned[_feeReceiver] = _rOwned[_feeReceiver].sub(fees.mul(_getRate()));
+// calculate the amount of fees to distribute to each holder
+uint256 numHolders = _rHolders.length;
+uint256 perHolder = fees.div(numHolders);
+
+// distribute the fees to each holder
+for (uint256 i = 0; i < numHolders; i++) {
+address holder = _rHolders[i];
+uint256 holderShare = _rOwned[holder].div(_rTotal);
+uint256 amount = perHolder.mul(holderShare);
+_balances[holder] = _balances[holder].add(amount);
+_rOwned[holder] = _rOwned[holder].add(amount.mul(_getRate()));
+}
+
+// emit the FeeDistributed event
+emit FeeDistributed(fees);
+}
+}
+
+function setFeeRates(uint256 buyFeeRate, uint256 sellFeeRate, uint256 redistributionRate) external onlyOwner() {
+require(buyFeeRate <= MAX_FEE_RATE && sellFeeRate <= MAX_FEE_RATE && redistributionRate <= 100, "Invalid fee rates.");
+_buyFeeRate = buyFeeRate;
+_sellFeeRate = sellFeeRate;
+_redistributionRate = redistributionRate;
+emit FeeRatesUpdated(buyFeeRate, sellFeeRate, redistributionRate);
+}
+
+function setSwapAndLiquifyEnabled(bool enabled) external onlyOwner() {
+swapAndLiquifyEnabled = enabled;
+emit SwapAndLiquifyEnabledUpdated(enabled);
+}
+}
+
+// generate the Uniswap pair path of token -> WETH
+address[] memory path = new address[](2);
+path[0] = address(this);
+path[1] = uniswapV2Router.WETH();
+
+// approve the transfer for the router
+_approve(address(this), address(uniswapV2Router), tokenAmount);
+
+// swap the tokens for ETH
+uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+tokenAmount,
+0, // accept any amount of ETH
+path,
+address(this),
+block.timestamp
+);
+}
+
+function addLiquidity(uint256 tokenAmount, uint256 ethAmount) private {
+// approve token transfer to cover all possible scenarios
+_approve(address(this), address(uniswapV2Router), tokenAmount);
+
+// add the liquidity
+uniswapV2Router.addLiquidityETH{value: ethAmount}(
+address(this),
+tokenAmount,
+0, // slippage is unavoidable
+0, // slippage is unavoidable
+owner(),
+block.timestamp
+);
+}
+
+function _distributeFees() private {
+// calculate the fees to distribute
+uint256 contractTokenBalance = balanceOf(address(this));
+uint256 fees = contractTokenBalance.sub(_previousContractTokenBalance);
+
+// reset the previous contract token balance
+_previousContractTokenBalance = contractTokenBalance;
+
+// distribute the fees among all holders except for the excluded ones
+if (fees > 0) {
+uint256 totalHoldersFee = fees.mul(_getFeeRate()).div(_getTransferFeeRate().sub(_getFeeRate()));
+uint256 contractTokenBalanceBeforeDistribution = contractTokenBalance.sub(fees);
+for (uint256 i = 0; i < _excluded.length; i++) {
+if (_excluded[i] != address(0)) {
+uint256 excludedBalanceBeforeDistribution = _balances[_excluded[i]].mul(contractTokenBalanceBeforeDistribution).div(_totalSupply);
+uint256 excludedBalanceAfterDistribution = _balances[_excluded[i]].mul(contractTokenBalance).div(_totalSupply);
+uint256 excludedFee = excludedBalanceAfterDistribution.sub(excludedBalanceBeforeDistribution);
+if (excludedFee > 0) {
+_balances[_excluded[i]] = _balances[_excluded[i]].add(excludedFee);
+_rOwned[_excluded[i]] = _rOwned[_excluded[i]].add(excludedFee.mul(_getRate()));
+emit Transfer(address(this), _excluded[i], excludedFee);
+}
+}
+}
+
+uint256 remainingFees = fees.sub(totalHoldersFee);
+if (remainingFees > 0) {
+uint256 currentRate = _getRate();
+uint256 remainingHoldersFee = remainingFees.mul(currentRate).div(contractTokenBalance);
+_rTotal = _rTotal.sub(remainingHoldersFee);
+_tFeeTotal = _tFeeTotal.add(remainingFees.sub(remainingHoldersFee));
+emit Transfer(address(this), address(0), remainingHoldersFee);
+}
+}
+}
+
+}
+

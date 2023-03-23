@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity >=0.7.0 <0.9.0;
+
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address recipient, uint256 amount) external returns (bool);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function totalSupply() external view returns (uint256);
+    function decimals() external view returns (uint8);
+    function symbol() external view returns (string memory);
+}
+
+contract LiquidityPool {
+    mapping(address => uint256) public balances;
+    uint256 public totalSupply;
+    IERC20 public token1;
+    IERC20 public token2;
+    uint256 public priceToken1;
+    uint256 public priceToken2;
+
+    constructor(IERC20 _token1, IERC20 _token2) {
+        token1 = _token1;
+        token2 = _token2;
+    }
+
+    function addLiquidity(uint256 amountToken1, uint256 amountToken2) external {
+        require(token1.balanceOf(msg.sender) >= amountToken1, "Insufficient balance of Token 1");
+        require(token2.balanceOf(msg.sender) >= amountToken2, "Insufficient balance of Token 2");
+        require(token1.transferFrom(msg.sender, address(this), amountToken1), "Failed to transfer Token 1");
+        require(token2.transferFrom(msg.sender, address(this), amountToken2), "Failed to transfer Token 2");
+        balances[msg.sender] += amountToken1;
+        balances[msg.sender] += amountToken2;
+        totalSupply += amountToken1;
+        totalSupply += amountToken2;
+        priceToken1 = totalSupply / token1.totalSupply();
+        priceToken2 = totalSupply / token2.totalSupply();
+    }
+
+    function removeLiquidity(uint256 amount) external {
+        require(balances[msg.sender] >= amount, "Insufficient liquidity");
+        uint256 token1Amount = amount * priceToken1;
+        uint256 token2Amount = amount * priceToken2;
+        require(token1.transfer(msg.sender, token1Amount), "Failed to transfer Token 1");
+        require(token2.transfer(msg.sender, token2Amount), "Failed to transfer Token 2");
+        balances[msg.sender] -= amount;
+        totalSupply -= amount;
+        priceToken1 = totalSupply / token1.totalSupply();
+        priceToken2 = totalSupply / token2.totalSupply();
+    }
+
+    function getPriceToken1() external view returns (uint256) {
+        return priceToken1;
+    }
+
+    function getPriceToken2() external view returns (uint256) {
+        return priceToken2;
+    }
+
+    function getLiquidity() external view returns (uint256) {
+        return totalSupply;
+    }
+
+    function getToken1() external view returns (IERC20) {
+        return token1;
+    }
+
+    function getToken2() external view returns (IERC20) {
+        return token2;
+    }
+}

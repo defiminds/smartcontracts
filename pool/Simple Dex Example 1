@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.7.0 <0.9.0;
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+contract PolygonDEX {
+    address public admin;
+    mapping(address => mapping(address => uint256)) public balances;
+    mapping(address => bool) public tokens;
+
+    event Deposit(address indexed from, address indexed token, uint256 amount);
+    event Withdraw(address indexed to, address indexed token, uint256 amount);
+    event Trade(
+        address indexed trader,
+        address indexed tokenBuy,
+        uint256 amountBuy,
+        address indexed tokenSell,
+        uint256 amountSell
+    );
+
+    constructor() {
+        admin = msg.sender;
+    }
+
+    function addToken(address token) external {
+        require(msg.sender == admin, "Only admin can add tokens");
+        tokens[token] = true;
+    }
+
+function deposit(address token, uint amount) external payable {
+    require(tokens[token], "Token not supported");
+    require(IERC20(token).transferFrom(msg.sender, address(this), amount), "Transfer failed");
+    balances[msg.sender][token] += amount;
+    emit Deposit(msg.sender, token, amount);
+    
+    uint gasLimit = gasleft() - 5000; // Set gas limit to current gas left minus 5000 (to account for additional gas usage)
+    uint gasPrice = tx.gasprice; // Get current gas price
+    uint gasCost = gasLimit * gasPrice; // Calculate gas cost
+    require(msg.value == gasCost, "Incorrect gas fee"); // Check if sender has provided the correct gas fee
+}
+
+
+
+function withdraw(address token, uint amount) external {
+    require(balances[msg.sender][token] >= amount, "Insufficient balance");
+    require(IERC20(token).transfer(msg.sender, amount), "Transfer failed");
+    balances[msg.sender][token] -= amount;
+    emit Withdraw(msg.sender, token, amount);
+
+    uint gasLimit = gasleft() - 5000; // Set gas limit to current gas left minus 5000 (to account for additional gas usage)
+    uint gasPrice = tx.gasprice; // Get current gas price
+    uint gasCost = gasLimit * gasPrice; // Calculate gas cost
+    payable(msg.sender).transfer(gasCost); // Refund the remaining gas fee to the sender
+}
+
+
+function trade(address tokenBuy, uint amountBuy, address tokenSell, uint amountSell) external {
+    require(tokens[tokenBuy] && tokens[tokenSell], "Tokens not supported");
+    require(balances[msg.sender][tokenBuy] >= amountBuy, "Insufficient balance");
+    uint amountSellAdjusted = (amountSell * 1e18) / amountBuy;
+    require(balances[msg.sender][tokenSell] >= amountSellAdjusted, "Insufficient balance");
+    balances[msg.sender][tokenBuy] -= amountBuy;
+    balances[msg.sender][tokenSell] += amountSellAdjusted;
+    balances[address(this)][tokenBuy] += amountBuy;
+    balances[address(this)][tokenSell] -= amountSellAdjusted;
+    emit Trade(msg.sender, tokenBuy, amountBuy, tokenSell, amountSellAdjusted);
+
+    uint gasLimit = gasleft() - 5000; // Set gas limit to current gas left minus 5000 (to account for additional gas usage)
+    uint gasPrice = tx.gasprice; // Get current gas price
+    uint gasCost = gasLimit * gasPrice; // Calculate gas cost
+    payable(msg.sender).transfer(gasCost); // Refund the remaining gas fee to the sender
+}
+
+}
